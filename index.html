@@ -1214,30 +1214,19 @@ svgEl.addEventListener('pointermove', e => {
     const dist = Math.hypot(pb.x - pa.x, pb.y - pa.y);
     if (lastPinchDist) {
       const factor = dist / lastPinchDist;
-      const newScale = Math.min(5, Math.max(0.1, S.view.scale * factor));
-      // Zoom toward midpoint of pinch
-      const mx = (e.clientX + (e.pointerId === +ids[0] ? activePointers[ids[1]].x : activePointers[ids[0]].x)) / 2;
-      const my = (e.clientY + (e.pointerId === +ids[0] ? activePointers[ids[1]].y : activePointers[ids[0]].y)) / 2;
-      const r = svgEl.getBoundingClientRect();
-      const svgMx = (mx - r.left) / S.view.scale + S.view.x;
-      const svgMy = (my - r.top)  / S.view.scale + S.view.y;
-      S.view.x = svgMx - (svgMx - S.view.x) * (newScale / S.view.scale);
-      S.view.y = svgMy - (svgMy - S.view.y) * (newScale / S.view.scale);
-      S.view.scale = newScale;
-      applyView();
+      zoomAtCenter(factor);
     }
     lastPinchDist = dist;
   }
 });
 
 // ── Zoom buttons ──
-function zoomBy(factor) {
+function zoomAtCenter(factor) {
   const newScale = Math.min(5, Math.max(0.1, S.view.scale * factor));
-  // Zoom toward canvas center
-  const cx = S.view.x + svgEl.clientWidth  / S.view.scale / 2;
-  const cy = S.view.y + svgEl.clientHeight / S.view.scale / 2;
-  S.view.x = cx - (cx - S.view.x) * (newScale / S.view.scale);
-  S.view.y = cy - (cy - S.view.y) * (newScale / S.view.scale);
+  const svgCx = S.view.x + svgEl.clientWidth  / S.view.scale / 2;
+  const svgCy = S.view.y + svgEl.clientHeight / S.view.scale / 2;
+  S.view.x = svgCx - svgEl.clientWidth  / newScale / 2;
+  S.view.y = svgCy - svgEl.clientHeight / newScale / 2;
   S.view.scale = newScale;
   applyView();
 }
@@ -1258,6 +1247,12 @@ function zoomFit() {
 }
 
 document.getElementById('btn-zoom-fit').addEventListener('click', zoomFit);
+
+// PC: scroll wheel zoom (canvas center anchor)
+svgEl.addEventListener('wheel', e => {
+  e.preventDefault();
+  zoomAtCenter(e.deltaY > 0 ? 0.88 : 1.14);
+}, { passive: false });
 
 // ─────────────────────────────────────────────
 //  KEYBOARD
