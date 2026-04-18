@@ -159,6 +159,25 @@ header {
 .canvas-wrap.mode-connect #svg-canvas { cursor: crosshair; }
 .canvas-wrap.mode-add #svg-canvas { cursor: cell; }
 
+#conn-delete-btn {
+  position: absolute;
+  display: none;
+  width: 28px;
+  height: 28px;
+  background: #da3633;
+  border: none;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  z-index: 21;
+  transform: translate(-50%, -50%);
+  line-height: 1;
+  touch-action: manipulation;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+#conn-delete-btn:hover { background: #f85149; }
+
 #conn-label-editor {
   position: absolute;
   display: none;
@@ -525,6 +544,7 @@ body.simple-mode .tool-sep-shapes { display: none; }
     </svg>
     <textarea id="text-editor" rows="2"></textarea>
     <input id="conn-label-editor" type="text" placeholder="ラベル (例: Yes / No)">
+    <button id="conn-delete-btn" title="接続を削除">✕</button>
 
     <!-- Zoom controls -->
     <div class="zoom-controls">
@@ -769,9 +789,9 @@ function renderNodes() {
 function makeNodeEl(node) {
   const sel = S.selected?.kind==='node' && S.selected.id===node.id;
   const isConnSrc = S.connecting === node.id;
-  const stroke = isConnSrc ? '#3fb950' : sel ? '#f0e68c' : (NODE_STROKE[node.type]||'#58a6ff');
+  const stroke = isConnSrc ? '#e0e0e0' : sel ? '#f0e68c' : (NODE_STROKE[node.type]||'#58a6ff');
   const sw = (isConnSrc || sel) ? 3 : 2;
-  const fill = isConnSrc ? '#1a2e1d' : '#1c2333';
+  const fill = isConnSrc ? '#2a2a3a' : '#1c2333';
 
   const g = svg('g', {'data-nid': node.id, style:'cursor:pointer'});
 
@@ -801,7 +821,7 @@ function makeNodeEl(node) {
   }
 
   if (sel) shape.setAttribute('filter','drop-shadow(0 0 7px rgba(240,230,140,0.6))');
-  if (isConnSrc) shape.setAttribute('filter','drop-shadow(0 0 10px rgba(63,185,80,0.8))');
+  if (isConnSrc) shape.setAttribute('filter','drop-shadow(0 0 10px rgba(220,220,255,0.9))');
 
   // Text (multi-line)
   const lines = (node.text||'').split('\n');
@@ -930,24 +950,24 @@ function makeConnEl(conn) {
   const line = svg('path', {d:pathD,
     stroke, 'stroke-width':sw, fill:'none', 'marker-end':marker});
 
-  // Label
+  g.appendChild(hit);
+  g.appendChild(line);
+
+  // Label (above arrow)
   if (conn.label) {
     const bg = svg('rect',{
       x:midX-22, y:midY-10, width:44, height:18, rx:3,
-      fill:'#1c2333', stroke:sel?'#f0e68c':'#30363d', 'stroke-width':'1'
+      fill:'#ffffff', stroke:sel?'#f0e68c':'#cccccc', 'stroke-width':'1'
     });
     const lt = svg('text',{
       x:midX, y:midY+1, 'text-anchor':'middle', 'dominant-baseline':'middle',
-      fill:sel?'#f0e68c':'#8b949e', 'font-size':'10',
+      fill:sel?'#996600':'#000000', 'font-size':'10',
       'font-family':'Noto Sans JP, sans-serif', 'pointer-events':'none'
     });
     lt.textContent = conn.label;
     g.appendChild(bg);
     g.appendChild(lt);
   }
-
-  g.appendChild(hit);
-  g.appendChild(line);
 
   hit.addEventListener('pointerdown', e => e.stopPropagation());
   line.addEventListener('pointerdown', e => e.stopPropagation());
@@ -1004,6 +1024,7 @@ txEdit.addEventListener('blur', commitTxEdit);
 //  CONN LABEL EDITOR
 // ─────────────────────────────────────────────
 const connLabelEditor = document.getElementById('conn-label-editor');
+const connDeleteBtn   = document.getElementById('conn-delete-btn');
 
 function openConnLabelEditor(conn, mid) {
   const {x:vx, y:vy, scale} = S.view;
@@ -1017,20 +1038,48 @@ function openConnLabelEditor(conn, mid) {
   connLabelEditor._cid  = conn.id;
   connLabelEditor.focus();
   connLabelEditor.select();
+
+  // Delete button: offset above the label editor
+  connDeleteBtn.style.display = 'flex';
+  connDeleteBtn.style.alignItems = 'center';
+  connDeleteBtn.style.justifyContent = 'center';
+  connDeleteBtn.style.left = (ex + 68) + 'px';
+  connDeleteBtn.style.top  = ey + 'px';
+  connDeleteBtn._cid = conn.id;
+}
+
+function closeConnUI() {
+  connLabelEditor._cid = null;
+  connLabelEditor.style.display = 'none';
+  connDeleteBtn._cid = null;
+  connDeleteBtn.style.display = 'none';
 }
 
 function commitConnLabelEdit() {
   if (!connLabelEditor._cid) return;
   const conn = getConn(connLabelEditor._cid);
   if (conn) { conn.label = connLabelEditor.value; render(); }
-  connLabelEditor._cid = null;
-  connLabelEditor.style.display = 'none';
+  closeConnUI();
 }
+
+connDeleteBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  if (!connDeleteBtn._cid) return;
+  pushHistory();
+  S.conns = S.conns.filter(c => c.id !== connDeleteBtn._cid);
+  S.selected = null;
+  closeConnUI();
+  render();
+});
 
 connLabelEditor.addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); commitConnLabelEdit(); }
 });
-connLabelEditor.addEventListener('blur', commitConnLabelEdit);
+connLabelEditor.addEventListener('blur', e => {
+  // blurがdeleteボタンクリックで発生した場合は無視
+  if (e.relatedTarget === connDeleteBtn) return;
+  commitConnLabelEdit();
+});
 
 // キャンバスタップで閉じる
 svgEl.addEventListener('pointerdown', () => {
