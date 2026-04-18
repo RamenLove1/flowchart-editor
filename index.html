@@ -1251,7 +1251,7 @@ document.getElementById('btn-zoom-fit').addEventListener('click', zoomFit);
 // PC: scroll wheel zoom (canvas center anchor)
 svgEl.addEventListener('wheel', e => {
   e.preventDefault();
-  zoomAtCenter(e.deltaY > 0 ? 0.88 : 1.14);
+  zoomAtCenter(e.deltaY > 0 ? 0.96 : 1.04);
 }, { passive: false });
 
 // ─────────────────────────────────────────────
