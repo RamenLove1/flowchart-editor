@@ -778,6 +778,12 @@ function render() {
   applyView();
   updateStatus();
   updateProps();
+  // 自動保存
+  try {
+    localStorage.setItem('flowcraft_data', JSON.stringify({
+      nodes: S.nodes, conns: S.conns, nextId: S.nextId
+    }));
+  } catch(e) {}
 }
 
 // ── NODES ──
@@ -1502,7 +1508,17 @@ function initSample() {
 // ─────────────────────────────────────────────
 //  INIT
 // ─────────────────────────────────────────────
-initSample();
+try {
+  const saved = localStorage.getItem('flowcraft_data');
+  if (saved) {
+    const d = JSON.parse(saved);
+    S.nodes = d.nodes; S.conns = d.conns; S.nextId = d.nextId;
+  } else {
+    initSample();
+  }
+} catch(e) {
+  initSample();
+}
 // Wait for layout
 requestAnimationFrame(() => {
   S.view = {x:-svgEl.clientWidth*0.5/1, y:-30, scale:1};
