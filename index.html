@@ -1,0 +1,1470 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlowCraft — フローチャートエディタ</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700&family=Noto+Sans+JP:wght@400;500&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  --bg: #0e1117;
+  --panel: #161b22;
+  --panel2: #1c2333;
+  --border: #30363d;
+  --accent: #3fb950;
+  --blue: #58a6ff;
+  --orange: #f0a058;
+  --purple: #d2a8ff;
+  --text: #e6edf3;
+  --muted: #7d8590;
+  --sel: #f0e68c;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans JP', sans-serif;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ===== HEADER ===== */
+header {
+  height: 48px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.logo {
+  font-family: 'Space Mono', monospace;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--blue);
+  letter-spacing: 0.04em;
+}
+
+.logo span { color: var(--accent); }
+
+.header-right { display: flex; gap: 8px; align-items: center; }
+
+.btn {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 5px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: 'Noto Sans JP', sans-serif;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn:hover { background: #21262d; border-color: #8b949e; }
+.btn.primary { background: var(--blue); border-color: var(--blue); color: #000; font-weight: 600; }
+.btn.primary:hover { background: #79c0ff; }
+.btn.danger { background: #da3633; border-color: #b91c1c; color: #fff; }
+.btn.danger:hover { background: #f85149; }
+
+/* ===== MAIN LAYOUT ===== */
+.main { display: flex; flex: 1; overflow: hidden; }
+
+/* ===== TOOLBAR ===== */
+.toolbar {
+  width: 64px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 0;
+  gap: 2px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.tool-sep {
+  width: 40px;
+  height: 1px;
+  background: var(--border);
+  margin: 6px 0;
+}
+
+.tool-btn {
+  width: 50px;
+  height: 50px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  transition: all 0.12s;
+  font-size: 9px;
+  font-family: 'Noto Sans JP', sans-serif;
+  position: relative;
+}
+.tool-btn svg { width: 22px; height: 22px; flex-shrink: 0; }
+.tool-btn:hover { background: #21262d; color: var(--text); border-color: var(--border); }
+.tool-btn.active { background: #21262d; border-color: var(--blue); color: var(--blue); }
+
+/* Tooltip */
+.tool-btn::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 58px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #30363d;
+  color: var(--text);
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 100;
+  border: 1px solid var(--border);
+}
+.tool-btn:hover::after { opacity: 1; }
+
+/* ===== CANVAS ===== */
+.canvas-wrap {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  background: var(--bg);
+}
+#svg-canvas { width: 100%; height: 100%; display: block; }
+
+/* cursor modes */
+.canvas-wrap.mode-select #svg-canvas { cursor: default; }
+.canvas-wrap.mode-pan #svg-canvas { cursor: grab; }
+.canvas-wrap.mode-pan.panning #svg-canvas { cursor: grabbing; }
+.canvas-wrap.mode-connect #svg-canvas { cursor: crosshair; }
+.canvas-wrap.mode-add #svg-canvas { cursor: cell; }
+
+#conn-label-editor {
+  position: absolute;
+  display: none;
+  border: 2px solid var(--sel);
+  border-radius: 5px;
+  background: var(--panel2);
+  color: var(--text);
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 12px;
+  text-align: center;
+  padding: 4px 8px;
+  outline: none;
+  z-index: 20;
+  width: 120px;
+  transform: translate(-50%, -50%);
+}
+
+/* In-SVG text editor */
+#text-editor {
+  position: absolute;
+  display: none;
+  border: 2px solid var(--blue);
+  border-radius: 5px;
+  background: var(--panel2);
+  color: var(--text);
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 13px;
+  text-align: center;
+  padding: 4px 8px;
+  outline: none;
+  resize: none;
+  z-index: 20;
+  line-height: 1.4;
+}
+
+/* ===== RIGHT PANEL ===== */
+.side-panel {
+  width: 210px;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.side-section {
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+  overflow-y: auto;
+}
+
+.side-title {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.prop-row { margin-bottom: 10px; }
+.prop-label { font-size: 10px; color: var(--muted); margin-bottom: 3px; }
+.prop-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 5px 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: 'Noto Sans JP', sans-serif;
+  outline: none;
+  transition: border-color 0.12s;
+}
+.prop-input:focus { border-color: var(--blue); }
+
+.prop-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+
+/* Help section */
+.help-list {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 2;
+  list-style: none;
+}
+.help-list li { display: flex; gap: 6px; }
+.help-list .key {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+  color: var(--text);
+  white-space: nowrap;
+  height: fit-content;
+  margin-top: 2px;
+}
+
+/* ===== MODAL ===== */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px 28px;
+  min-width: 280px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.modal-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.modal-body {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+.btn.active-mode {
+  background: var(--panel2);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Simple mode */
+.toolbar-shapes {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+}
+
+body.simple-mode .side-panel { display: none; }
+body.simple-mode .statusbar  { display: none; }
+body.simple-mode .toolbar-shapes { display: none; }
+body.simple-mode .tool-sep-shapes { display: none; }
+
+/* ===== TOUCH & TABLET ===== */
+#svg-canvas   { touch-action: none; }
+.canvas-wrap  { touch-action: none; }
+.btn          { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.tool-btn     { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.zoom-btn     { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.modal-actions button { touch-action: manipulation; }
+
+/* Panel toggle (visible on tablet portrait) */
+#btn-panel-toggle {
+  display: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+/* Side panel slide-in for tablet */
+@media (max-width: 900px) {
+  #btn-panel-toggle { display: flex; align-items: center; justify-content: center; }
+
+  .side-panel {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 50;
+    transform: translateX(100%);
+    transition: transform 0.2s ease;
+    box-shadow: -4px 0 20px rgba(0,0,0,0.5);
+  }
+  .side-panel.open { transform: translateX(0); }
+
+  /* Larger touch targets on tablet */
+  .tool-btn { width: 56px; height: 56px; }
+  .toolbar { width: 72px; }
+  .btn { padding: 7px 14px; font-size: 13px; }
+}
+
+/* ===== ZOOM CONTROLS ===== */
+.zoom-controls {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.zoom-btn {
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  transition: background 0.12s;
+  line-height: 1;
+}
+.zoom-btn:hover { background: #21262d; }
+.zoom-btn.fit {
+  font-size: 10px;
+  font-family: 'Space Mono', monospace;
+  width: auto;
+  padding: 0 8px;
+  color: var(--muted);
+}
+.zoom-btn.fit:hover { color: var(--text); }
+
+.zoom-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+}
+
+#zoom-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  min-width: 40px;
+  text-align: center;
+}
+
+/* ===== STATUS BAR ===== */
+.statusbar {
+  height: 26px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 20px;
+  flex-shrink: 0;
+}
+.statusbar span {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+}
+.statusbar .st-tool { color: var(--blue); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Flow<span>Craft</span></div>
+  <div class="header-right">
+    <button class="btn" id="btn-panel-toggle" title="パネル">⚙</button>
+    <button class="btn" id="btn-simple-mode">簡易モード</button>
+    <button class="btn" id="btn-undo">↩ 元に戻す</button>
+    <button class="btn" id="btn-redo">↪ やり直す</button>
+    <button class="btn" id="btn-clear">🗑 クリア</button>
+    <button class="btn primary" id="btn-export">↓ SVG 書き出し</button>
+  </div>
+</header>
+
+<div class="main">
+  <!-- ===== TOOLBAR ===== -->
+  <div class="toolbar">
+    <!-- Mode tools -->
+    <button class="tool-btn active" id="tool-select" data-tip="選択 (S)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+        <path d="M5 3l14 9-7 2-2 7z"/>
+      </svg>
+      選択
+    </button>
+    <button class="tool-btn" id="tool-connect" data-tip="接続 (C)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M5 12h14M14 7l5 5-5 5"/>
+      </svg>
+      接続
+    </button>
+    <button class="tool-btn" id="tool-pan" data-tip="パン (H)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8l-1.5-3a1.5 1.5 0 0 0-2.7 1.3l3.2 6.4A6 6 0 0 0 12 22h2a6 6 0 0 0 6-6v-5a2 2 0 0 0-4 0"/>
+      </svg>
+      パン
+    </button>
+
+    <div class="tool-sep tool-sep-shapes"></div>
+
+    <!-- Shape tools -->
+    <div class="toolbar-shapes">
+    <button class="tool-btn" id="tool-process" data-tip="処理 (P)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#58a6ff" stroke-width="2">
+        <rect x="3" y="7" width="18" height="10" rx="2"/>
+      </svg>
+      処理
+    </button>
+    <button class="tool-btn" id="tool-decision" data-tip="判断 (D)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#f0a058" stroke-width="2">
+        <polygon points="12,3 21,12 12,21 3,12"/>
+      </svg>
+      判断
+    </button>
+    <button class="tool-btn" id="tool-terminal" data-tip="端子 (T)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#3fb950" stroke-width="2">
+        <ellipse cx="12" cy="12" rx="9" ry="6"/>
+      </svg>
+      端子
+    </button>
+    <button class="tool-btn" id="tool-io" data-tip="入出力 (I)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#d2a8ff" stroke-width="2">
+        <polygon points="6,6 20,6 18,18 4,18"/>
+      </svg>
+      入出力
+    </button>
+    </div>
+  </div>
+
+  <!-- ===== CANVAS ===== -->
+  <div class="canvas-wrap mode-select" id="canvas-wrap">
+    <svg id="svg-canvas" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="grid-dot" width="24" height="24" patternUnits="userSpaceOnUse">
+          <circle cx="12" cy="12" r="0.85" fill="#21262d"/>
+        </pattern>
+        <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0,10 3.5,0 7" fill="#8b949e"/>
+        </marker>
+        <marker id="arr-sel" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0,10 3.5,0 7" fill="#f0e68c"/>
+        </marker>
+        <marker id="arr-temp" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0,10 3.5,0 7" fill="#8b949e"/>
+        </marker>
+        <filter id="glow-sel">
+          <feGaussianBlur stdDeviation="3" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+
+      <!-- Background grid -->
+      <rect id="grid-bg" width="100%" height="100%" fill="url(#grid-dot)"/>
+
+      <!-- Layers -->
+      <g id="layer-conns"></g>
+      <g id="layer-nodes"></g>
+    </svg>
+    <textarea id="text-editor" rows="2"></textarea>
+    <input id="conn-label-editor" type="text" placeholder="ラベル (例: Yes / No)">
+
+    <!-- Zoom controls -->
+    <div class="zoom-controls">
+      <span id="zoom-label">100%</span>
+      <div class="zoom-divider"></div>
+      <button class="zoom-btn fit" id="btn-zoom-fit" title="全体を表示">全体を表示</button>
+    </div>
+  </div>
+
+  <!-- ===== RIGHT PANEL ===== -->
+  <div class="side-panel">
+    <!-- Properties -->
+    <div class="side-section" style="flex:0 0 auto;">
+      <div class="side-title">プロパティ</div>
+
+      <div id="props-empty" style="font-size:11px;color:var(--muted);">
+        ノードまたは接続を<br>選択してください
+      </div>
+
+      <div id="props-node" style="display:none">
+        <div class="prop-row">
+          <div class="prop-label">テキスト</div>
+          <input class="prop-input" id="prop-text" type="text" placeholder="テキスト">
+        </div>
+        <div class="prop-row-2">
+          <div>
+            <div class="prop-label">X</div>
+            <input class="prop-input" id="prop-x" type="number">
+          </div>
+          <div>
+            <div class="prop-label">Y</div>
+            <input class="prop-input" id="prop-y" type="number">
+          </div>
+        </div>
+        <div class="prop-row-2">
+          <div>
+            <div class="prop-label">幅</div>
+            <input class="prop-input" id="prop-w" type="number">
+          </div>
+          <div>
+            <div class="prop-label">高さ</div>
+            <input class="prop-input" id="prop-h" type="number">
+          </div>
+        </div>
+        <button class="btn danger" id="btn-del-node" style="width:100%;margin-top:4px">削除</button>
+      </div>
+
+      <div id="props-conn" style="display:none">
+        <div class="prop-row">
+          <div class="prop-label">ラベル</div>
+          <input class="prop-input" id="prop-conn-label" type="text" placeholder="例: Yes / No">
+        </div>
+        <button class="btn danger" id="btn-del-conn" style="width:100%;margin-top:4px">削除</button>
+      </div>
+    </div>
+
+    <!-- Help -->
+    <div class="side-section" style="flex:1;overflow-y:auto;">
+      <div class="side-title">操作方法</div>
+      <ul class="help-list">
+        <li><span class="key">S</span>選択モード</li>
+        <li><span class="key">C</span>接続モード</li>
+        <li><span class="key">H</span>パンモード</li>
+        <li><span class="key">P</span>処理ノード追加</li>
+        <li><span class="key">D</span>判断ノード追加</li>
+        <li><span class="key">T</span>端子ノード追加</li>
+        <li><span class="key">I</span>入出力ノード追加</li>
+        <li><span class="key">Del</span>選択中の要素を削除</li>
+        <li><span class="key">Ctrl+Z</span>元に戻す</li>
+        <li><span class="key">Ctrl+Y</span>やり直す</li>
+        <li><span class="key">ドラッグ</span>ノード移動</li>
+        <li><span class="key">全体を表示</span>画面に収める</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- STATUS BAR -->
+<div class="statusbar">
+  <span class="st-tool" id="st-tool">選択モード</span>
+  <span id="st-nodes">ノード: 0</span>
+  <span id="st-zoom">ズーム: 100%</span>
+  <span id="st-pos">X: 0, Y: 0</span>
+  <span id="st-msg" style="color:var(--accent);"></span>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-title">🗑 キャンバスをクリア</div>
+    <div class="modal-body">すべてのノードと接続を削除します。<br>この操作は元に戻せます（Ctrl+Z）。</div>
+    <div class="modal-actions">
+      <button class="btn" id="modal-cancel">キャンセル</button>
+      <button class="btn danger" id="modal-confirm">削除する</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────
+const S = {
+  nodes: [],        // {id,type,x,y,w,h,text}
+  conns: [],        // {id,from,to,label}
+  selected: null,   // {kind:'node'|'conn', id}
+  tool: 'select',
+  connecting: null, // node id
+  _tmpLine: null,
+  nextId: 1,
+  history: [],
+  redoStack: [],
+  view: { x:0, y:0, scale:1 },
+};
+
+// ─────────────────────────────────────────────
+//  DOM
+// ─────────────────────────────────────────────
+const svgEl     = document.getElementById('svg-canvas');
+const layerN    = document.getElementById('layer-nodes');
+const layerC    = document.getElementById('layer-conns');
+const wrap      = document.getElementById('canvas-wrap');
+const txEdit    = document.getElementById('text-editor');
+
+// ─────────────────────────────────────────────
+//  UTILS
+// ─────────────────────────────────────────────
+const uid = () => 'e' + (S.nextId++);
+
+const NODE_SIZES = {
+  process:  {w:150, h:60},
+  decision: {w:130, h:90},
+  terminal: {w:130, h:52},
+  io:       {w:150, h:60},
+};
+
+const NODE_STROKE = {
+  process:  '#58a6ff',
+  decision: '#f0a058',
+  terminal: '#3fb950',
+  io:       '#d2a8ff',
+};
+
+function svgPt(e) {
+  const r = svgEl.getBoundingClientRect();
+  return {
+    x: (e.clientX - r.left) / S.view.scale + S.view.x,
+    y: (e.clientY - r.top)  / S.view.scale + S.view.y,
+  };
+}
+
+function getNode(id) { return S.nodes.find(n => n.id === id); }
+function getConn(id) { return S.conns.find(c => c.id === id); }
+
+// Border intersection for arrow endpoints
+function borderPt(node, tx, ty) {
+  const dx = tx - node.x, dy = ty - node.y;
+  if (dx === 0 && dy === 0) return {x: node.x, y: node.y};
+  const a = Math.atan2(dy, dx);
+  const hw = node.w/2, hh = node.h/2;
+  const ca = Math.cos(a), sa = Math.sin(a);
+
+  if (node.type === 'decision') {
+    const t = 1 / (Math.abs(ca)/hw + Math.abs(sa)/hh);
+    return {x: node.x + t*ca, y: node.y + t*sa};
+  }
+  if (node.type === 'terminal') {
+    const t = 1 / Math.sqrt(ca*ca/(hw*hw) + sa*sa/(hh*hh));
+    return {x: node.x + t*ca, y: node.y + t*sa};
+  }
+  // Rect / IO
+  const tanA = Math.abs(sa / (ca || 1e-9));
+  const thr  = hh / hw;
+  const t = tanA < thr ? hw/Math.abs(ca || 1e-9) : hh/Math.abs(sa || 1e-9);
+  return {x: node.x + dx*t/Math.sqrt(dx*dx+dy*dy)*Math.min(Math.sqrt(dx*dx+dy*dy),t),
+          y: node.y + dy*t/Math.sqrt(dx*dx+dy*dy)*Math.min(Math.sqrt(dx*dx+dy*dy),t)};
+}
+
+// Cleaner border using parametric
+function edgePt(node, tx, ty) {
+  const dx = tx - node.x, dy = ty - node.y;
+  if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) return {x:node.x, y:node.y};
+  const dist = Math.sqrt(dx*dx+dy*dy);
+  const nx = dx/dist, ny = dy/dist;
+  const hw = node.w/2, hh = node.h/2;
+
+  if (node.type === 'terminal') {
+    const t = 1/Math.sqrt(nx*nx/(hw*hw)+ny*ny/(hh*hh));
+    return {x:node.x+nx*t, y:node.y+ny*t};
+  }
+  if (node.type === 'decision') {
+    const t = 1/(Math.abs(nx)/hw + Math.abs(ny)/hh);
+    return {x:node.x+nx*t, y:node.y+ny*t};
+  }
+  // Rectangle / IO
+  let t;
+  if (Math.abs(nx) < 1e-9) t = hh/Math.abs(ny);
+  else if (Math.abs(ny) < 1e-9) t = hw/Math.abs(nx);
+  else t = Math.min(hw/Math.abs(nx), hh/Math.abs(ny));
+  return {x:node.x+nx*t, y:node.y+ny*t};
+}
+
+// ─────────────────────────────────────────────
+//  VIEW / ZOOM
+// ─────────────────────────────────────────────
+function applyView() {
+  const w = svgEl.clientWidth, h = svgEl.clientHeight;
+  const {x,y,scale} = S.view;
+  svgEl.setAttribute('viewBox', `${x} ${y} ${w/scale} ${h/scale}`);
+  const pct = Math.round(scale*100)+'%';
+  document.getElementById('st-zoom').textContent  = `ズーム: ${pct}`;
+  const lbl = document.getElementById('zoom-label');
+  if (lbl) lbl.textContent = pct;
+}
+
+// Center view on first load
+function centerView() {
+  S.view.x = -svgEl.clientWidth/2 / S.view.scale;
+  S.view.y = -svgEl.clientHeight/2 / S.view.scale;
+  applyView();
+}
+
+// ─────────────────────────────────────────────
+//  RENDER
+// ─────────────────────────────────────────────
+function render() {
+  renderConns();
+  renderNodes();
+  applyView();
+  updateStatus();
+  updateProps();
+}
+
+// ── NODES ──
+function renderNodes() {
+  layerN.innerHTML = '';
+  S.nodes.forEach(n => layerN.appendChild(makeNodeEl(n)));
+}
+
+function makeNodeEl(node) {
+  const sel = S.selected?.kind==='node' && S.selected.id===node.id;
+  const isConnSrc = S.connecting === node.id;
+  const stroke = isConnSrc ? '#3fb950' : sel ? '#f0e68c' : (NODE_STROKE[node.type]||'#58a6ff');
+  const sw = (isConnSrc || sel) ? 3 : 2;
+  const fill = isConnSrc ? '#1a2e1d' : '#1c2333';
+
+  const g = svg('g', {'data-nid': node.id, style:'cursor:pointer'});
+
+  let shape;
+  if (node.type === 'process') {
+    shape = svg('rect', {
+      x: node.x-node.w/2, y: node.y-node.h/2, width: node.w, height: node.h,
+      rx:4, fill, stroke, 'stroke-width':sw
+    });
+  } else if (node.type === 'decision') {
+    const hw=node.w/2, hh=node.h/2;
+    shape = svg('polygon', {
+      points:`${node.x},${node.y-hh} ${node.x+hw},${node.y} ${node.x},${node.y+hh} ${node.x-hw},${node.y}`,
+      fill, stroke, 'stroke-width':sw
+    });
+  } else if (node.type === 'terminal') {
+    shape = svg('ellipse', {
+      cx:node.x, cy:node.y, rx:node.w/2, ry:node.h/2,
+      fill, stroke, 'stroke-width':sw
+    });
+  } else if (node.type === 'io') {
+    const hw=node.w/2, hh=node.h/2, sk=16;
+    shape = svg('polygon', {
+      points:`${node.x-hw+sk},${node.y-hh} ${node.x+hw+sk},${node.y-hh} ${node.x+hw-sk},${node.y+hh} ${node.x-hw-sk},${node.y+hh}`,
+      fill, stroke, 'stroke-width':sw
+    });
+  }
+
+  if (sel) shape.setAttribute('filter','drop-shadow(0 0 7px rgba(240,230,140,0.6))');
+  if (isConnSrc) shape.setAttribute('filter','drop-shadow(0 0 10px rgba(63,185,80,0.8))');
+
+  // Text (multi-line)
+  const lines = (node.text||'').split('\n');
+  const lh = 15;
+  const textEl = svg('text', {
+    'text-anchor':'middle', fill:'#e6edf3',
+    'font-size':'12.5', 'font-family':'Noto Sans JP, sans-serif',
+    'pointer-events':'none'
+  });
+  if (lines.length === 1) {
+    textEl.setAttribute('x', node.x);
+    textEl.setAttribute('y', node.y);
+    textEl.setAttribute('dominant-baseline','middle');
+    textEl.textContent = node.text||'';
+  } else {
+    const startY = node.y - (lines.length-1)*lh/2;
+    lines.forEach((ln,i) => {
+      const ts = svg('tspan',{x:node.x, y:startY+i*lh});
+      ts.textContent = ln;
+      textEl.appendChild(ts);
+    });
+  }
+
+  g.appendChild(shape);
+  g.appendChild(textEl);
+
+  // ── Node events ──
+  let dragState = null;
+
+  g.addEventListener('pointerdown', e => {
+    e.stopPropagation();
+
+    if (S.tool === 'connect') {
+      if (!S.connecting) {
+        S.connecting = node.id;
+        S._tmpLine = {x1:node.x, y1:node.y, x2:node.x, y2:node.y};
+        setMsg('接続先ノードをクリック (接続元を再クリックでキャンセル)');
+        render();
+      } else if (S.connecting === node.id) {
+        S.connecting = null; S._tmpLine = null;
+        setMsg('');
+        render();
+      } else {
+        pushHistory();
+        S.conns.push({id:uid(), from:S.connecting, to:node.id, label:''});
+        S.connecting = null; S._tmpLine = null;
+        setMsg('');
+        render();
+      }
+      return;
+    }
+
+    if (S.tool === 'select') {
+      pushHistory();
+      setSelected({kind:'node', id:node.id});
+      const pt = svgPt(e);
+      dragState = {mx:pt.x, my:pt.y, ox:node.x, oy:node.y};
+      g.setPointerCapture(e.pointerId);
+      render();
+    }
+  });
+
+  g.addEventListener('pointermove', e => {
+    if (!dragState) return;
+    const pt = svgPt(e);
+    node.x = dragState.ox + (pt.x - dragState.mx);
+    node.y = dragState.oy + (pt.y - dragState.my);
+    render();
+  });
+
+  g.addEventListener('pointerup', e => {
+    if (dragState) {
+      g.releasePointerCapture(e.pointerId);
+      dragState = null;
+    }
+  });
+
+  return g;
+}
+
+// ── CONNECTIONS ──
+function renderConns() {
+  // Cleanup old event listeners via stored refs
+  layerC.querySelectorAll('[data-cid]').forEach(el => {
+    if (el._cleanup) el._cleanup();
+  });
+  layerC.innerHTML = '';
+
+  // Temp connecting line
+  if (S.connecting && S._tmpLine) {
+    const t = S._tmpLine;
+    const fromNode = getNode(S.connecting);
+    if (fromNode) {
+      const bp = edgePt(fromNode, t.x2, t.y2);
+      const ln = svg('line',{x1:bp.x,y1:bp.y,x2:t.x2,y2:t.y2,
+        stroke:'#8b949e','stroke-width':'1.5','stroke-dasharray':'6,4',
+        'marker-end':'url(#arr-temp)'});
+      layerC.appendChild(ln);
+    }
+  }
+
+  S.conns.forEach(conn => layerC.appendChild(makeConnEl(conn)));
+}
+
+function makeConnEl(conn) {
+  const fn = getNode(conn.from), tn = getNode(conn.to);
+  if (!fn || !tn) return svg('g',{});
+
+  const sel = S.selected?.kind==='conn' && S.selected.id===conn.id;
+  const stroke = sel ? '#f0e68c' : '#8b949e';
+  const sw     = sel ? '2.5' : '1.5';
+  const marker = sel ? 'url(#arr-sel)' : 'url(#arr)';
+
+  // Routing: going upward → exit left side, enter left side
+  const goingUp = tn.y < fn.y - 10;
+
+  let p1, p2, pathD, midX, midY;
+
+  if (goingUp) {
+    p1 = { x: fn.x - fn.w/2, y: fn.y };
+    p2 = { x: tn.x - tn.w/2, y: tn.y };
+    const lx = Math.min(p1.x, p2.x) - 36;
+    pathD = `M ${p1.x} ${p1.y} L ${lx} ${p1.y} L ${lx} ${p2.y} L ${p2.x} ${p2.y}`;
+    midX = lx;
+    midY = (p1.y + p2.y) / 2;
+  } else {
+    p1 = edgePt(fn, tn.x, tn.y);
+    p2 = edgePt(tn, fn.x, fn.y);
+    pathD = `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`;
+    midX = (p1.x + p2.x) / 2;
+    midY = (p1.y + p2.y) / 2;
+  }
+
+  const g = svg('g', {'data-cid': conn.id});
+
+  // Hit area (thick transparent path)
+  const hit = svg('path', {d:pathD,
+    stroke:'transparent', 'stroke-width':'14', fill:'none', style:'cursor:pointer'});
+
+  // Visible arrow path
+  const line = svg('path', {d:pathD,
+    stroke, 'stroke-width':sw, fill:'none', 'marker-end':marker});
+
+  // Label
+  if (conn.label) {
+    const bg = svg('rect',{
+      x:midX-22, y:midY-10, width:44, height:18, rx:3,
+      fill:'#1c2333', stroke:sel?'#f0e68c':'#30363d', 'stroke-width':'1'
+    });
+    const lt = svg('text',{
+      x:midX, y:midY+1, 'text-anchor':'middle', 'dominant-baseline':'middle',
+      fill:sel?'#f0e68c':'#8b949e', 'font-size':'10',
+      'font-family':'Noto Sans JP, sans-serif', 'pointer-events':'none'
+    });
+    lt.textContent = conn.label;
+    g.appendChild(bg);
+    g.appendChild(lt);
+  }
+
+  g.appendChild(hit);
+  g.appendChild(line);
+
+  hit.addEventListener('pointerdown', e => e.stopPropagation());
+  line.addEventListener('pointerdown', e => e.stopPropagation());
+
+  const onClick = e => {
+    e.stopPropagation();
+    if (S.tool !== 'select') return;
+    setSelected({kind:'conn', id:conn.id});
+    render();
+    openConnLabelEditor(conn, {x:midX, y:midY}, {x:midX, y:midY});
+  };
+  hit.addEventListener('click', onClick);
+  line.addEventListener('click', onClick);
+
+  return g;
+}
+
+// ─────────────────────────────────────────────
+//  TEXT EDITOR
+// ─────────────────────────────────────────────
+function openTxEdit(node) {
+  const r = svgEl.getBoundingClientRect();
+  const {x:vx,y:vy,scale} = S.view;
+  const ex = (node.x - vx)*scale + r.left - (node.w*scale)/2;
+  const ey = (node.y - vy)*scale + r.top  - (node.h*scale)/2;
+
+  txEdit.style.display  = 'block';
+  txEdit.style.left     = ex+'px';
+  txEdit.style.top      = ey+'px';
+  txEdit.style.width    = (node.w*scale)+'px';
+  txEdit.style.height   = (node.h*scale)+'px';
+  txEdit.style.fontSize = (12.5*scale)+'px';
+  txEdit.value = node.text||'';
+  txEdit._nid  = node.id;
+  txEdit.focus();
+  txEdit.select();
+}
+
+function commitTxEdit() {
+  if (!txEdit._nid) return;
+  const node = getNode(txEdit._nid);
+  if (node) { node.text = txEdit.value; render(); }
+  txEdit._nid = null;
+  txEdit.style.display = 'none';
+}
+
+txEdit.addEventListener('keydown', e => {
+  if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); commitTxEdit(); }
+  if (e.key==='Escape') { txEdit._nid=null; txEdit.style.display='none'; }
+});
+txEdit.addEventListener('blur', commitTxEdit);
+
+// ─────────────────────────────────────────────
+//  CONN LABEL EDITOR
+// ─────────────────────────────────────────────
+const connLabelEditor = document.getElementById('conn-label-editor');
+
+function openConnLabelEditor(conn, mid) {
+  const {x:vx, y:vy, scale} = S.view;
+  const ex = (mid.x - vx) * scale;
+  const ey = (mid.y - vy) * scale;
+
+  connLabelEditor.style.display = 'block';
+  connLabelEditor.style.left = ex + 'px';
+  connLabelEditor.style.top  = ey + 'px';
+  connLabelEditor.value = conn.label || '';
+  connLabelEditor._cid  = conn.id;
+  connLabelEditor.focus();
+  connLabelEditor.select();
+}
+
+function commitConnLabelEdit() {
+  if (!connLabelEditor._cid) return;
+  const conn = getConn(connLabelEditor._cid);
+  if (conn) { conn.label = connLabelEditor.value; render(); }
+  connLabelEditor._cid = null;
+  connLabelEditor.style.display = 'none';
+}
+
+connLabelEditor.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); commitConnLabelEdit(); }
+});
+connLabelEditor.addEventListener('blur', commitConnLabelEdit);
+
+// キャンバスタップで閉じる
+svgEl.addEventListener('pointerdown', () => {
+  if (connLabelEditor._cid) commitConnLabelEdit();
+});
+
+// ─────────────────────────────────────────────
+//  PANEL TOGGLE (tablet portrait)
+// ─────────────────────────────────────────────
+const sidePanel = document.querySelector('.side-panel');
+document.getElementById('btn-panel-toggle').addEventListener('click', () => {
+  sidePanel.classList.toggle('open');
+});
+
+// ─────────────────────────────────────────────
+//  SELECTION & PROPS
+// ─────────────────────────────────────────────
+function setSelected(sel) {
+  S.selected = sel;
+  updateProps();
+}
+
+function updateProps() {
+  const pe=document.getElementById('props-empty');
+  const pn=document.getElementById('props-node');
+  const pc=document.getElementById('props-conn');
+
+  if (!S.selected) {
+    pe.style.display='block'; pn.style.display='none'; pc.style.display='none'; return;
+  }
+  if (S.selected.kind==='node') {
+    const node=getNode(S.selected.id); if(!node) return;
+    pe.style.display='none'; pn.style.display='block'; pc.style.display='none';
+    document.getElementById('prop-text').value = node.text||'';
+    document.getElementById('prop-x').value = Math.round(node.x);
+    document.getElementById('prop-y').value = Math.round(node.y);
+    document.getElementById('prop-w').value = Math.round(node.w);
+    document.getElementById('prop-h').value = Math.round(node.h);
+  } else if (S.selected.kind==='conn') {
+    const conn=getConn(S.selected.id); if(!conn) return;
+    pe.style.display='none'; pn.style.display='none'; pc.style.display='block';
+    document.getElementById('prop-conn-label').value = conn.label||'';
+  }
+}
+
+// Props input handlers
+document.getElementById('prop-text').addEventListener('input', e => {
+  if (S.selected?.kind==='node') { const n=getNode(S.selected.id); if(n){n.text=e.target.value;render();} }
+});
+['prop-x','prop-y','prop-w','prop-h'].forEach(id => {
+  document.getElementById(id).addEventListener('input', e => {
+    if (S.selected?.kind==='node') {
+      const n=getNode(S.selected.id); if(!n) return;
+      const v=parseFloat(e.target.value); if(isNaN(v)) return;
+      const map={'prop-x':'x','prop-y':'y','prop-w':'w','prop-h':'h'};
+      n[map[id]]=v; render();
+    }
+  });
+});
+document.getElementById('prop-conn-label').addEventListener('input', e => {
+  if (S.selected?.kind==='conn') { const c=getConn(S.selected.id); if(c){c.label=e.target.value;render();} }
+});
+
+document.getElementById('btn-del-node').addEventListener('click', deleteSelected);
+document.getElementById('btn-del-conn').addEventListener('click', deleteSelected);
+
+// ─────────────────────────────────────────────
+//  STATUS
+// ─────────────────────────────────────────────
+function updateStatus() {
+  document.getElementById('st-nodes').textContent = `ノード: ${S.nodes.length}`;
+}
+
+function setMsg(m) { document.getElementById('st-msg').textContent = m; }
+
+// ─────────────────────────────────────────────
+//  CANVAS INTERACTIONS
+// ─────────────────────────────────────────────
+let isPanning=false, panStart=null;
+
+// Pinch-to-zoom state
+const activePointers = {};
+let lastPinchDist = null;
+
+document.addEventListener('pointermove', e => {
+  if (isPanning && panStart) {
+    const dx = (e.clientX-panStart.cx)/S.view.scale;
+    const dy = (e.clientY-panStart.cy)/S.view.scale;
+    S.view.x = panStart.vx - dx;
+    S.view.y = panStart.vy - dy;
+    applyView();
+  }
+
+  if (S.connecting && S._tmpLine) {
+    const pt = svgPt(e);
+    S._tmpLine.x2 = pt.x; S._tmpLine.y2 = pt.y;
+    renderConns();
+  }
+
+  const pt = svgPt(e);
+  document.getElementById('st-pos').textContent = `X: ${Math.round(pt.x)}, Y: ${Math.round(pt.y)}`;
+});
+
+document.addEventListener('pointerup', e => {
+  delete activePointers[e.pointerId];
+  if (Object.keys(activePointers).length < 2) lastPinchDist = null;
+  isPanning=false; panStart=null;
+  setToolCursor();
+  wrap.classList.remove('panning');
+});
+
+document.addEventListener('pointercancel', e => {
+  delete activePointers[e.pointerId];
+  lastPinchDist = null;
+  isPanning=false; panStart=null;
+  wrap.classList.remove('panning');
+});
+
+// SVG canvas pointer events
+svgEl.addEventListener('pointerdown', e => {
+  if (e.button !== 0 && e.pointerType === 'mouse') return;
+
+  activePointers[e.pointerId] = {x: e.clientX, y: e.clientY};
+
+  // Two-finger pinch: don't start other interactions
+  if (Object.keys(activePointers).length >= 2) {
+    isPanning = false; panStart = null;
+    return;
+  }
+
+  // Pan tool
+  if (S.tool==='pan') {
+    isPanning = true;
+    panStart = {cx:e.clientX, cy:e.clientY, vx:S.view.x, vy:S.view.y};
+    wrap.classList.add('panning');
+    return;
+  }
+
+  // Add node
+  if (['process','decision','terminal','io'].includes(S.tool)) {
+    pushHistory();
+    const pt = svgPt(e);
+    const sz = NODE_SIZES[S.tool];
+    const node = {id:uid(), type:S.tool, x:pt.x, y:pt.y, w:sz.w, h:sz.h,
+      text: {process:'処理', decision:'条件?', terminal:'スタート', io:'データ'}[S.tool]};
+    S.nodes.push(node);
+    setSelected({kind:'node', id:node.id});
+    render();
+    return;
+  }
+
+  // Deselect in select mode
+  if (S.tool==='select') {
+    setSelected(null);
+    render();
+  }
+});
+
+// Pinch-to-zoom via pointermove on SVG
+svgEl.addEventListener('pointermove', e => {
+  activePointers[e.pointerId] = {x: e.clientX, y: e.clientY};
+  const ids = Object.keys(activePointers);
+  if (ids.length === 2) {
+    isPanning = false;
+    const pa = activePointers[ids[0]], pb = activePointers[ids[1]];
+    const dist = Math.hypot(pb.x - pa.x, pb.y - pa.y);
+    if (lastPinchDist) {
+      const factor = dist / lastPinchDist;
+      const newScale = Math.min(5, Math.max(0.1, S.view.scale * factor));
+      // Zoom toward midpoint of pinch
+      const mx = (e.clientX + (e.pointerId === +ids[0] ? activePointers[ids[1]].x : activePointers[ids[0]].x)) / 2;
+      const my = (e.clientY + (e.pointerId === +ids[0] ? activePointers[ids[1]].y : activePointers[ids[0]].y)) / 2;
+      const r = svgEl.getBoundingClientRect();
+      const svgMx = (mx - r.left) / S.view.scale + S.view.x;
+      const svgMy = (my - r.top)  / S.view.scale + S.view.y;
+      S.view.x = svgMx - (svgMx - S.view.x) * (newScale / S.view.scale);
+      S.view.y = svgMy - (svgMy - S.view.y) * (newScale / S.view.scale);
+      S.view.scale = newScale;
+      applyView();
+    }
+    lastPinchDist = dist;
+  }
+});
+
+// ── Zoom buttons ──
+function zoomBy(factor) {
+  const newScale = Math.min(5, Math.max(0.1, S.view.scale * factor));
+  // Zoom toward canvas center
+  const cx = S.view.x + svgEl.clientWidth  / S.view.scale / 2;
+  const cy = S.view.y + svgEl.clientHeight / S.view.scale / 2;
+  S.view.x = cx - (cx - S.view.x) * (newScale / S.view.scale);
+  S.view.y = cy - (cy - S.view.y) * (newScale / S.view.scale);
+  S.view.scale = newScale;
+  applyView();
+}
+
+function zoomFit() {
+  if (!S.nodes.length) { S.view={x:0,y:0,scale:1}; applyView(); return; }
+  const pad = 60;
+  const allX = S.nodes.flatMap(n=>[n.x-n.w/2, n.x+n.w/2]);
+  const allY = S.nodes.flatMap(n=>[n.y-n.h/2, n.y+n.h/2]);
+  const minX=Math.min(...allX)-pad, maxX=Math.max(...allX)+pad;
+  const minY=Math.min(...allY)-pad, maxY=Math.max(...allY)+pad;
+  const scaleX = svgEl.clientWidth  / (maxX-minX);
+  const scaleY = svgEl.clientHeight / (maxY-minY);
+  S.view.scale = Math.min(5, Math.max(0.1, Math.min(scaleX, scaleY)));
+  S.view.x = minX - (svgEl.clientWidth /S.view.scale - (maxX-minX))/2;
+  S.view.y = minY - (svgEl.clientHeight/S.view.scale - (maxY-minY))/2;
+  applyView();
+}
+
+document.getElementById('btn-zoom-fit').addEventListener('click', zoomFit);
+
+// ─────────────────────────────────────────────
+//  KEYBOARD
+// ─────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  const isInput = e.target.matches('input,textarea');
+
+  if (!isInput) {
+    if (e.key==='s') setTool('select');
+    if (e.key==='h') setTool('pan');
+    if (e.key==='c') setTool('connect');
+    if (e.key==='p') setTool('process');
+    if (e.key==='d') setTool('decision');
+    if (e.key==='t') setTool('terminal');
+    if (e.key==='i') setTool('io');
+    if (e.key==='Delete'||e.key==='Backspace') deleteSelected();
+  }
+
+  if ((e.ctrlKey||e.metaKey) && e.key==='z') { e.preventDefault(); undo(); }
+  if ((e.ctrlKey||e.metaKey) && (e.key==='y'||(e.shiftKey&&e.key==='z'))) { e.preventDefault(); redo(); }
+});
+
+// ─────────────────────────────────────────────
+//  TOOLS
+// ─────────────────────────────────────────────
+const TOOL_NAMES = {
+  select:'選択モード', pan:'パンモード', connect:'接続モード',
+  process:'処理ノード追加', decision:'判断ノード追加',
+  terminal:'端子ノード追加', io:'入出力ノード追加'
+};
+
+function setTool(t) {
+  if (t !== 'select') { S.selected = null; }
+  S.tool=t; S.connecting=null; S._tmpLine=null; setMsg('');
+  document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tool-'+t)?.classList.add('active');
+  setToolCursor();
+  document.getElementById('st-tool').textContent = TOOL_NAMES[t]||t;
+  if (t==='connect') setMsg('ノードをクリックして接続を開始');
+  render();
+}
+
+function setToolCursor() {
+  wrap.className = 'canvas-wrap';
+  if (S.tool==='pan') wrap.classList.add('mode-pan');
+  else if (S.tool==='select')    wrap.classList.add('mode-select');
+  else if (S.tool==='connect')   wrap.classList.add('mode-connect');
+  else                           wrap.classList.add('mode-add');
+}
+
+['select','pan','process','decision','terminal','io','connect'].forEach(t => {
+  document.getElementById('tool-'+t)?.addEventListener('click', ()=>setTool(t));
+});
+
+// ─────────────────────────────────────────────
+//  DELETE
+// ─────────────────────────────────────────────
+function deleteSelected() {
+  if (!S.selected) return;
+  pushHistory();
+  if (S.selected.kind==='node') {
+    const id=S.selected.id;
+    S.nodes = S.nodes.filter(n=>n.id!==id);
+    S.conns = S.conns.filter(c=>c.from!==id&&c.to!==id);
+  } else {
+    const id=S.selected.id;
+    S.conns = S.conns.filter(c=>c.id!==id);
+  }
+  S.selected=null;
+  render();
+}
+
+// ─────────────────────────────────────────────
+//  HISTORY
+// ─────────────────────────────────────────────
+function snapshot() {
+  return JSON.stringify({nodes:S.nodes,conns:S.conns,nextId:S.nextId});
+}
+
+function pushHistory() {
+  S.history.push(snapshot());
+  if (S.history.length>80) S.history.shift();
+  S.redoStack=[];
+}
+
+function undo() {
+  if (!S.history.length) return;
+  S.redoStack.push(snapshot());
+  const prev = JSON.parse(S.history.pop());
+  S.nodes=prev.nodes; S.conns=prev.conns; S.nextId=prev.nextId;
+  S.selected=null; render();
+}
+
+function redo() {
+  if (!S.redoStack.length) return;
+  S.history.push(snapshot());
+  const next = JSON.parse(S.redoStack.pop());
+  S.nodes=next.nodes; S.conns=next.conns; S.nextId=next.nextId;
+  S.selected=null; render();
+}
+
+// ─────────────────────────────────────────────
+//  SIMPLE MODE
+// ─────────────────────────────────────────────
+let simpleMode = false;
+const btnSimple = document.getElementById('btn-simple-mode');
+btnSimple.addEventListener('click', () => {
+  simpleMode = !simpleMode;
+  document.body.classList.toggle('simple-mode', simpleMode);
+  btnSimple.textContent = simpleMode ? '通常モード' : '簡易モード';
+  btnSimple.classList.toggle('active-mode', simpleMode);
+  // 簡易モード中はノード追加ツールが選ばれていたら選択に戻す
+  if (simpleMode && ['process','decision','terminal','io'].includes(S.tool)) {
+    setTool('select');
+  }
+});
+
+document.getElementById('btn-undo').addEventListener('click', undo);
+document.getElementById('btn-redo').addEventListener('click', redo);
+
+const modalOverlay = document.getElementById('modal-overlay');
+document.getElementById('modal-cancel') .addEventListener('click', () => modalOverlay.classList.remove('open'));
+document.getElementById('modal-confirm').addEventListener('click', () => {
+  modalOverlay.classList.remove('open');
+  pushHistory();
+  S.nodes=[]; S.conns=[]; S.selected=null;
+  render();
+});
+
+document.getElementById('btn-clear').addEventListener('click', () => {
+  modalOverlay.classList.add('open');
+});
+
+// ─────────────────────────────────────────────
+//  EXPORT SVG
+// ─────────────────────────────────────────────
+document.getElementById('btn-export').addEventListener('click', () => {
+  // Temporarily reset viewBox to fit all nodes
+  const allX = S.nodes.map(n=>[n.x-n.w/2,n.x+n.w/2]).flat();
+  const allY = S.nodes.map(n=>[n.y-n.h/2,n.y+n.h/2]).flat();
+  const pad = 40;
+  const minX = Math.min(...allX)-pad, minY = Math.min(...allY)-pad;
+  const maxX = Math.max(...allX)+pad, maxY = Math.max(...allY)+pad;
+
+  const origVB = svgEl.getAttribute('viewBox');
+  svgEl.setAttribute('viewBox',`${minX} ${minY} ${maxX-minX} ${maxY-minY}`);
+
+  const ser = new XMLSerializer();
+  let str = ser.serializeToString(svgEl);
+  // Inject font
+  str = str.replace('<svg','<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
+
+  svgEl.setAttribute('viewBox', origVB);
+
+  const blob = new Blob([str],{type:'image/svg+xml'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href=url; a.download='flowchart.svg'; a.click();
+  URL.revokeObjectURL(url);
+});
+
+// ─────────────────────────────────────────────
+//  SVG HELPER
+// ─────────────────────────────────────────────
+function svg(tag, attrs={}) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  Object.entries(attrs).forEach(([k,v]) => el.setAttribute(k,v));
+  return el;
+}
+
+// ─────────────────────────────────────────────
+//  SAMPLE CHART
+// ─────────────────────────────────────────────
+function initSample() {
+  const cx = 0, pad = 130;
+  const n = (type,x,y,text) => ({id:uid(),type,x,y,w:NODE_SIZES[type].w,h:NODE_SIZES[type].h,text});
+
+  const n1 = n('terminal', cx,       0,    'スタート');
+  const n2 = n('process',  cx,       pad,  'データを入力');
+  const n3 = n('decision', cx,       pad*2,'入力は\n正しい?');
+  const n4 = n('process',  cx-160,   pad*3,'エラーを\n表示する');
+  const n5 = n('process',  cx+10,    pad*3,'処理を\n実行する');
+  const n6 = n('io',       cx+10,    pad*4,'結果を出力');
+  const n7 = n('terminal', cx+10,    pad*5,'終了');
+
+  S.nodes = [n1,n2,n3,n4,n5,n6,n7];
+  S.conns = [
+    {id:uid(),from:n1.id,to:n2.id,label:''},
+    {id:uid(),from:n2.id,to:n3.id,label:''},
+    {id:uid(),from:n3.id,to:n5.id,label:'Yes'},
+    {id:uid(),from:n3.id,to:n4.id,label:'No'},
+    {id:uid(),from:n4.id,to:n2.id,label:'再入力'},
+    {id:uid(),from:n5.id,to:n6.id,label:''},
+    {id:uid(),from:n6.id,to:n7.id,label:''},
+  ];
+}
+
+// ─────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────
+initSample();
+// Wait for layout
+requestAnimationFrame(() => {
+  S.view = {x:-svgEl.clientWidth*0.5/1, y:-30, scale:1};
+  applyView();
+  render();
+});
+</script>
+</body>
+</html>
