@@ -859,23 +859,8 @@ function makeNodeEl(node) {
       setSelected({kind:'node', id:node.id});
       const pt = svgPt(e);
       dragState = {mx:pt.x, my:pt.y, ox:node.x, oy:node.y};
-      g.setPointerCapture(e.pointerId);
+      activeDrag = { node, dragStateRef: () => dragState, clear: () => { dragState = null; } };
       render();
-    }
-  });
-
-  g.addEventListener('pointermove', e => {
-    if (!dragState) return;
-    const pt = svgPt(e);
-    node.x = dragState.ox + (pt.x - dragState.mx);
-    node.y = dragState.oy + (pt.y - dragState.my);
-    render();
-  });
-
-  g.addEventListener('pointerup', e => {
-    if (dragState) {
-      g.releasePointerCapture(e.pointerId);
-      dragState = null;
     }
   });
 
@@ -1125,12 +1110,25 @@ function setMsg(m) { document.getElementById('st-msg').textContent = m; }
 //  CANVAS INTERACTIONS
 // ─────────────────────────────────────────────
 let isPanning=false, panStart=null;
+let activeDrag = null; // { node, dragStateRef, clear }
 
 // Pinch-to-zoom state
 const activePointers = {};
 let lastPinchDist = null;
 
 document.addEventListener('pointermove', e => {
+  // Node drag
+  if (activeDrag) {
+    const ds = activeDrag.dragStateRef();
+    if (ds) {
+      const pt = svgPt(e);
+      activeDrag.node.x = ds.ox + (pt.x - ds.mx);
+      activeDrag.node.y = ds.oy + (pt.y - ds.my);
+      render();
+      return;
+    }
+  }
+
   if (isPanning && panStart) {
     const dx = (e.clientX-panStart.cx)/S.view.scale;
     const dy = (e.clientY-panStart.cy)/S.view.scale;
@@ -1150,6 +1148,7 @@ document.addEventListener('pointermove', e => {
 });
 
 document.addEventListener('pointerup', e => {
+  if (activeDrag) { activeDrag.clear(); activeDrag = null; }
   delete activePointers[e.pointerId];
   if (Object.keys(activePointers).length < 2) lastPinchDist = null;
   isPanning=false; panStart=null;
@@ -1158,6 +1157,7 @@ document.addEventListener('pointerup', e => {
 });
 
 document.addEventListener('pointercancel', e => {
+  if (activeDrag) { activeDrag.clear(); activeDrag = null; }
   delete activePointers[e.pointerId];
   lastPinchDist = null;
   isPanning=false; panStart=null;
